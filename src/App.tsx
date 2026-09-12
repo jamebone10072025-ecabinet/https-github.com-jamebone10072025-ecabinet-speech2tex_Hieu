@@ -23,6 +23,7 @@ import {
   Share2,
   Save,
   Loader2,
+  Globe,
 } from "lucide-react";
 import { SupportedLanguage, SummaryResult, SummaryStyle, SummaryLength, SpeechSessionItem, SessionCategory } from "./types";
 import { SUPPORTED_LANGUAGES, SAMPLE_RECORDINGS } from "./data/languages";
@@ -714,6 +715,21 @@ export default function App() {
               <Volume2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               <span className="hidden sm:inline">Đọc văn bản (TTS)</span>
               <span className="sm:hidden">TTS</span>
+            </button>
+
+            {/* Direct Export HTML Offline Button */}
+            <button
+              type="button"
+              id="btn-header-export-html"
+              onClick={() => setIsExportModalOpen(true)}
+              title="Tải tệp HTML offline độc lập chạy không cần mạng, hoặc xuất Word/PDF"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/70 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800 rounded-xl text-xs font-bold shadow-2xs transition-all"
+            >
+              <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Tải HTML</span>
+              <span className="hidden sm:inline-block text-[10px] font-mono font-bold bg-emerald-200/60 dark:bg-emerald-800/60 px-1 py-0.2 rounded text-emerald-800 dark:text-emerald-200">
+                .html
+              </span>
             </button>
 
             {/* Dark / Light Mode Toggle */}

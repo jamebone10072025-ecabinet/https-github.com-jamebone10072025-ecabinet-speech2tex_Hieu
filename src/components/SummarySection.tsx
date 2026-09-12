@@ -20,6 +20,7 @@ import {
   ChevronRight,
   GitBranch,
   Share2,
+  Globe,
 } from "lucide-react";
 import { SummaryResult, SummaryStyle, SummaryLength } from "../types";
 import { SUPPORTED_LANGUAGES } from "../data/languages";
@@ -426,11 +427,14 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                     type="button"
                     id="btn-export-doc-summary"
                     onClick={onOpenExportModal}
-                    title="Xuất bản ghi & tóm tắt ra tệp HTML offline, Word hoặc PDF"
-                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-all shadow-xs"
+                    title="Tải tệp HTML offline chạy không cần mạng, hoặc xuất Word/PDF"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-300/80 dark:border-emerald-700 rounded-xl transition-all shadow-xs"
                   >
-                    <FileDown className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>Xuất tài liệu (HTML, Word, PDF)</span>
+                    <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Tải HTML offline</span>
+                    <span className="hidden sm:inline-block px-1.5 py-0.2 bg-emerald-200/60 dark:bg-emerald-800/60 text-emerald-800 dark:text-emerald-200 rounded text-[10px] font-mono font-bold">
+                      .html
+                    </span>
                   </button>
                 )}
 

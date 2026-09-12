@@ -512,6 +512,21 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
             </button>
           )}
 
+          {/* Direct HTML Download button */}
+          {onOpenExportModal && (
+            <button
+              type="button"
+              id="btn-direct-download-html"
+              onClick={onOpenExportModal}
+              disabled={!trimmed}
+              title="Tải tệp HTML offline độc lập (kèm audio phát lại và bộ đọc giọng nói TTS)"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs"
+            >
+              <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Tải HTML</span>
+            </button>
+          )}
+
           {/* Download Menu (TXT, SRT, VTT) */}
           <div className="relative">
             <button

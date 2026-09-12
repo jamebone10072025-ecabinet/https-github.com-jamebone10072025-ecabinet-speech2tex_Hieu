@@ -481,7 +481,7 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
-                    Xuất tệp HTML độc lập chạy 100% offline (.html)
+                    Tải tệp HTML độc lập chạy 100% offline (.html)
                   </h4>
                   <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">
                     Mở được trên mọi máy tính và điện thoại không cần internet, máy chủ hay cài đặt
@@ -677,7 +677,7 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
               ) : (
                 <Globe className="w-4 h-4" />
               )}
-              <span>{isExportingHtml ? "Đang tạo HTML..." : "Xuất file HTML offline (.html)"}</span>
+              <span>{isExportingHtml ? "Đang tạo HTML..." : "Tải file HTML offline (.html)"}</span>
             </button>
 
             {/* Audio Summary Export Button */}
