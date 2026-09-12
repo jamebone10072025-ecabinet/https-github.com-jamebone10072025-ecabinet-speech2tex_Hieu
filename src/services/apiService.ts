@@ -186,3 +186,29 @@ export async function generateGeminiTTS(
   return response.json();
 }
 
+export interface ExtractDocumentTextResponse {
+  success: boolean;
+  extractedText: string;
+  fileName: string;
+  characterCount: number;
+}
+
+export async function extractDocumentText(
+  fileData: string,
+  fileName: string,
+  mimeType: string
+): Promise<ExtractDocumentTextResponse> {
+  const response = await fetch("/api/extract-document-text", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fileData, fileName, mimeType }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || "Không thể trích xuất nội dung văn bản từ tệp.");
+  }
+
+  return response.json();
+}
+

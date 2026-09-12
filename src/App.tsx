@@ -209,6 +209,7 @@ export default function App() {
   // Speech Recognition hook - initial transcript restored from draft if exists
   const {
     isListening,
+    speechState,
     transcript,
     interimTranscript,
     error: speechError,
@@ -229,10 +230,12 @@ export default function App() {
   // Dedicated Text-to-Speech Studio Modal state
   const [isTTSStudioOpen, setIsTTSStudioOpen] = useState<boolean>(false);
   const [ttsStudioInitialText, setTtsStudioInitialText] = useState<string>("");
+  const [ttsStudioInitialMode, setTtsStudioInitialMode] = useState<"text" | "file">("text");
 
   const handleOpenTTSStudio = useCallback(
-    (initialTextToUse?: string) => {
+    (initialTextToUse?: string, mode: "text" | "file" = "text") => {
       setTtsStudioInitialText(initialTextToUse !== undefined ? initialTextToUse : transcript);
+      setTtsStudioInitialMode(mode);
       setIsTTSStudioOpen(true);
     },
     [transcript]
@@ -312,6 +315,8 @@ export default function App() {
     isPaused: isAudioPaused,
     duration: audioDuration,
     analyserNode,
+    audioLevel,
+    isSilent,
     startRecording: startAudioRecording,
     pauseRecording: pauseAudioRecorderAction,
     resumeRecording: resumeAudioRecorderAction,
@@ -642,11 +647,11 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  VoiceScribe AI
+                  Ghi Chép Giọng Nói AI
                 </h1>
                 <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800">
                   <Languages className="w-3 h-3" />
-                  Đa Ngôn Ngữ & Tóm Tắt Tự Động
+                  Đa ngôn ngữ & Tóm tắt tự động
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
@@ -763,6 +768,10 @@ export default function App() {
             resetAudioRecording={resetAudioRecording}
             isLoadingAI={isLoadingAI}
             setIsLoadingAI={setIsLoadingAI}
+            audioLevel={audioLevel}
+            isSilent={isSilent}
+            speechState={speechState}
+            currentTranscript={transcript}
             onError={(msg) => showToast(msg, "error")}
             isTimestampingEnabled={isTimestampingEnabled}
             onToggleTimestamping={setIsTimestampingEnabled}
@@ -1073,13 +1082,14 @@ export default function App() {
         durationSeconds={audioDuration}
       />
 
-      {/* Export Document (PDF / Word) Modal */}
+      {/* Export Document (PDF / Word / Audio WAV) Modal */}
       <ExportDocumentModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         title={sessionTitle}
         category={activeCategory}
         languageName={selectedLanguage.name}
+        languageCode={selectedLanguage.code}
         transcript={transcript}
         summary={summary}
         onSuccess={(msg) => showToast(msg, "success")}
@@ -1112,7 +1122,7 @@ export default function App() {
         currentLanguageCode={selectedLanguage.code}
         onError={(msg) => showToast(msg, "error")}
         onSuccessToast={(msg) => showToast(msg, "success")}
-        onOpenFullStudio={(txt) => handleOpenTTSStudio(txt)}
+        onOpenFullStudio={(txt, _title, mode) => handleOpenTTSStudio(txt, mode || "text")}
       />
 
       {/* Dedicated Full Text-to-Speech Studio Modal */}
@@ -1120,6 +1130,7 @@ export default function App() {
         isOpen={isTTSStudioOpen}
         onClose={() => setIsTTSStudioOpen(false)}
         initialText={ttsStudioInitialText}
+        initialMode={ttsStudioInitialMode}
         currentTranscript={transcript}
         currentSummaryText={
           summary

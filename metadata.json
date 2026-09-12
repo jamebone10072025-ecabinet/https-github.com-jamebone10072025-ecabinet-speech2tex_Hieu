@@ -1,5 +1,5 @@
 {
-  "name": "Chuyển Giọng Nói Thành Văn Bản & Tóm Tắt Tự Động",
+  "name": "Chuyển giọng nói thành văn bản & Tóm tắt tự động",
   "description": "Ứng dụng chuyển đổi giọng nói thành văn bản & đọc văn bản thành giọng nói (Text-to-Speech), hỗ trợ đa ngôn ngữ và tự động tóm tắt thông minh bằng AI.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

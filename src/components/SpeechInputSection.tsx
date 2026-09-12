@@ -18,6 +18,11 @@ import {
   RotateCcw,
   Pause,
   Play,
+  Volume2,
+  VolumeX,
+  Zap,
+  Radio,
+  Activity,
 } from "lucide-react";
 import { SupportedLanguage } from "../types";
 import { SAMPLE_RECORDINGS, SampleRecording } from "../data/languages";
@@ -54,11 +59,18 @@ interface SpeechInputSectionProps {
   isLoadingAI: boolean;
   setIsLoadingAI: (loading: boolean) => void;
   onError: (msg: string) => void;
+  // Enhanced STT props
+  audioLevel?: number;
+  isSilent?: boolean;
+  speechState?: "idle" | "listening" | "speaking" | "recovering";
+  currentTranscript?: string;
   // Timestamping controls
   isTimestampingEnabled?: boolean;
   onToggleTimestamping?: (enabled: boolean) => void;
   onInsertManualTimestamp?: (seconds?: number) => void;
 }
+
+export type STTRecognitionMode = "hybrid" | "gemini" | "webspeech";
 
 export const SpeechInputSection: React.FC<SpeechInputSectionProps> = ({
   selectedLanguage,
@@ -84,11 +96,17 @@ export const SpeechInputSection: React.FC<SpeechInputSectionProps> = ({
   isLoadingAI,
   setIsLoadingAI,
   onError,
+  audioLevel = 0,
+  isSilent = false,
+  speechState = "idle",
+  currentTranscript = "",
   isTimestampingEnabled = true,
   onToggleTimestamping,
   onInsertManualTimestamp,
 }) => {
   const [activeTab, setActiveTab] = useState<"mic" | "upload" | "samples">("mic");
+  const [recognitionMode, setRecognitionMode] = useState<STTRecognitionMode>("hybrid");
+  const [lastRecordedBlob, setLastRecordedBlob] = useState<Blob | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedAudioUrl, setUploadedAudioUrl] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -116,29 +134,10 @@ export const SpeechInputSection: React.FC<SpeechInputSectionProps> = ({
       .padStart(2, "0")}`;
   };
 
-  const handleToggleRecording = async () => {
-    if (isListening || isAudioRecording) {
-      // Stopping
-      stopListening();
-      const recordedBlob = await stopAudioRecording();
-
-      if (recordedBlob && !isWebSpeechSupported) {
-        handleTranscribeBlob(recordedBlob);
-      }
-    } else {
-      // Starting
-      resetAudioRecording();
-      await startAudioRecording();
-      if (isWebSpeechSupported) {
-        startListening();
-      }
-    }
-  };
-
-  const handleTranscribeBlob = async (blob: Blob) => {
+  const handleTranscribeBlob = async (blob: Blob, customNotice?: string) => {
     try {
       setIsLoadingAI(true);
-      setUploadProgress("Đang phân tích âm thanh và chuyển đổi qua Gemini AI...");
+      setUploadProgress(customNotice || "Đang phân tích âm thanh và chuyển đổi qua Gemini AI...");
 
       const reader = new FileReader();
       reader.onloadend = async () => {
@@ -168,6 +167,53 @@ export const SpeechInputSection: React.FC<SpeechInputSectionProps> = ({
       setIsLoadingAI(false);
       setUploadProgress(null);
       onError(err.message || "Lỗi xử lý tệp âm thanh.");
+    }
+  };
+
+  const handleToggleRecording = async () => {
+    if (isListening || isAudioRecording) {
+      // Stopping recording
+      if (isListening) {
+        stopListening();
+      }
+      const recordedBlob = await stopAudioRecording();
+
+      if (recordedBlob) {
+        setLastRecordedBlob(recordedBlob);
+
+        // Case 1: Always use Gemini AI if user selected Gemini mode or WebSpeech is not supported
+        if (recognitionMode === "gemini" || !isWebSpeechSupported) {
+          await handleTranscribeBlob(
+            recordedBlob,
+            "Đang xử lý âm thanh microphone qua Gemini AI Studio để đạt độ chính xác tối đa..."
+          );
+        }
+        // Case 2: Hybrid mode auto-fallback:
+        // If the browser Web Speech yielded 0 or almost no text (< 3 words) while recording was >= 2 seconds,
+        // automatically fallback to Gemini 3.5 Transcribe so the user never loses their words!
+        else if (recognitionMode === "hybrid") {
+          const wordsCount = currentTranscript.trim()
+            ? currentTranscript.trim().split(/\s+/).filter(Boolean).length
+            : 0;
+
+          if (wordsCount < 3 && audioDuration >= 2) {
+            await handleTranscribeBlob(
+              recordedBlob,
+              "✨ Web Speech chưa bắt kịp âm thanh. Hệ thống đang tự động khôi phục toàn bộ văn bản qua Gemini AI..."
+            );
+          }
+        }
+      }
+    } else {
+      // Starting recording
+      resetAudioRecording();
+      setLastRecordedBlob(null);
+      await startAudioRecording();
+
+      // Start Web Speech if not exclusively Gemini mode and browser supports it
+      if (recognitionMode !== "gemini" && isWebSpeechSupported) {
+        startListening();
+      }
     }
   };
 
@@ -352,8 +398,100 @@ export const SpeechInputSection: React.FC<SpeechInputSectionProps> = ({
       {/* Tab 1: Microphone Live Recording */}
       {activeTab === "mic" && (
         <div className="p-5 sm:p-6 flex flex-col items-center">
+          {/* STT Recognition Mode Selector Bar */}
+          <div className="w-full max-w-xl mb-4 p-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl">
+            <div className="flex items-center justify-between px-2 py-1 mb-1.5">
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                Chế độ chuyển giọng nói thành văn bản (STT):
+              </span>
+              {recognitionMode === "hybrid" && (
+                <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full">
+                  ⚡ Tự động tối ưu
+                </span>
+              )}
+              {recognitionMode === "gemini" && (
+                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                  🎙️ Độ chính xác cao nhất
+                </span>
+              )}
+              {recognitionMode === "webspeech" && (
+                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full">
+                  🌐 Tức thì qua trình duyệt
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setRecognitionMode("hybrid")}
+                disabled={isAnyRecording}
+                className={`px-3 py-2 rounded-xl text-left transition-all text-xs flex flex-col gap-0.5 ${
+                  recognitionMode === "hybrid"
+                    ? "bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-xs border border-indigo-200 dark:border-indigo-800/80 font-bold"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800/40"
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold">
+                  <Zap className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Kết hợp Tự động</span>
+                </div>
+                <span className="text-[10px] font-normal text-slate-400 dark:text-slate-500 leading-tight">
+                  Tức thì + Gemini AI tự động cứu văn bản nếu bị mất chữ
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRecognitionMode("gemini")}
+                disabled={isAnyRecording}
+                className={`px-3 py-2 rounded-xl text-left transition-all text-xs flex flex-col gap-0.5 ${
+                  recognitionMode === "gemini"
+                    ? "bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 shadow-xs border border-emerald-200 dark:border-emerald-800/80 font-bold"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800/40"
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Gemini AI Studio</span>
+                </div>
+                <span className="text-[10px] font-normal text-slate-400 dark:text-slate-500 leading-tight">
+                  Chuẩn xác tuyệt đối, chuẩn tiếng Việt, dấu câu & lọc ồn
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRecognitionMode("webspeech")}
+                disabled={isAnyRecording}
+                className={`px-3 py-2 rounded-xl text-left transition-all text-xs flex flex-col gap-0.5 ${
+                  recognitionMode === "webspeech"
+                    ? "bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 shadow-xs border border-amber-200 dark:border-amber-800/80 font-bold"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800/40"
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold">
+                  <Globe className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Web Speech</span>
+                </div>
+                <span className="text-[10px] font-normal text-slate-400 dark:text-slate-500 leading-tight">
+                  Nhận diện tức thì trực tiếp trên trình duyệt Web
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* AI Progress Banner */}
+          {uploadProgress && (
+            <div className="w-full max-w-xl mb-4 p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 rounded-xl flex items-center gap-2.5 text-xs text-indigo-800 dark:text-indigo-300 animate-pulse">
+              <Loader2 className="w-4 h-4 animate-spin shrink-0 text-indigo-600 dark:text-indigo-400" />
+              <div className="font-medium flex-1">{uploadProgress}</div>
+            </div>
+          )}
+
           {!isWebSpeechSupported && (
-            <div className="w-full mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-300">
+            <div className="w-full max-w-xl mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-300">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
               <div>
                 <span className="font-semibold">Lưu ý:</span> Trình duyệt đang sử dụng chế độ ghi âm đa phương thức để gửi trực tiếp tới Gemini AI nhận diện giọng nói chính xác.
@@ -362,12 +500,78 @@ export const SpeechInputSection: React.FC<SpeechInputSectionProps> = ({
           )}
 
           {/* Audio Visualizer */}
-          <div className="w-full max-w-md mb-6">
+          <div className="w-full max-w-md mb-4">
             <AudioVisualizer
               analyserNode={analyserNode}
               isRecording={isAnyRecording}
             />
           </div>
+
+          {/* Real-time Microphone Audio Level & Speech Status Bar (when recording) */}
+          {isAnyRecording && (
+            <div className="w-full max-w-md mb-5 p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl flex flex-col gap-2 shadow-2xs">
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <div className="flex items-center gap-1.5">
+                  {isSilent ? (
+                    <VolumeX className="w-4 h-4 text-rose-500 animate-pulse" />
+                  ) : (
+                    <Volume2 className="w-4 h-4 text-indigo-500" />
+                  )}
+                  <span className="text-slate-600 dark:text-slate-300">Âm lượng Micro:</span>
+                  <span className="font-mono text-slate-700 dark:text-slate-200">{Math.round(audioLevel)}%</span>
+                </div>
+
+                {/* Speech State Badge */}
+                <div>
+                  {speechState === "speaking" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 animate-pulse">
+                      <Activity className="w-3 h-3 text-emerald-600" />
+                      Đang nhận diện giọng nói
+                    </span>
+                  )}
+                  {speechState === "listening" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      <Radio className="w-3 h-3 text-indigo-600" />
+                      Đang lắng nghe...
+                    </span>
+                  )}
+                  {speechState === "recovering" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                      <RotateCcw className="w-3 h-3 text-amber-600 animate-spin" />
+                      Đang kết nối lại...
+                    </span>
+                  )}
+                  {speechState === "idle" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold text-slate-400">
+                      Sẵn sàng
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Progress VU Bar */}
+              <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-100 rounded-full ${
+                    audioLevel > 25
+                      ? "bg-emerald-500"
+                      : audioLevel > 8
+                      ? "bg-indigo-500"
+                      : "bg-amber-500"
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(3, audioLevel))}%` }}
+                />
+              </div>
+
+              {/* Silence Warning Tip */}
+              {isSilent && audioDuration >= 2 && (
+                <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 p-1.5 rounded-lg border border-amber-200 dark:border-amber-800/40">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>Micro chưa phát hiện tín hiệu rõ. Vui lòng nói to hơn hoặc đưa micro lại gần.</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Main Record Button & Controls */}
           <div className="flex flex-col items-center gap-4 w-full max-w-lg">
@@ -491,7 +695,7 @@ export const SpeechInputSection: React.FC<SpeechInputSectionProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                  Hỗ trợ nhận diện giọng nói đa ngôn ngữ, tự động ngắt câu, chèn mốc thời gian và xử lý tiếng ồn.
+                  Tự động ngắt câu, chèn mốc thời gian, lọc tạp âm và nhận diện giọng nói chính xác.
                 </p>
               </div>
             )}
@@ -535,20 +739,32 @@ export const SpeechInputSection: React.FC<SpeechInputSectionProps> = ({
 
             {/* Audio Playback of the last recording */}
             {audioUrl && !isAnyRecording && (
-              <div className="w-full mt-2 flex flex-col gap-2">
+              <div className="w-full mt-2 flex flex-col gap-2 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
                 <AudioPlayerControl audioUrl={audioUrl} fileName="ghi-am-giong-noi.webm" />
                 <button
                   type="button"
                   onClick={() => {
-                    fetch(audioUrl)
-                      .then((r) => r.blob())
-                      .then((blob) => handleTranscribeBlob(blob));
+                    if (lastRecordedBlob) {
+                      handleTranscribeBlob(
+                        lastRecordedBlob,
+                        "Đang dùng Gemini AI chuyển đổi lại toàn diện bản ghi âm với độ chính xác cao nhất..."
+                      );
+                    } else {
+                      fetch(audioUrl)
+                        .then((r) => r.blob())
+                        .then((blob) =>
+                          handleTranscribeBlob(
+                            blob,
+                            "Đang dùng Gemini AI chuyển đổi lại toàn diện bản ghi âm với độ chính xác cao nhất..."
+                          )
+                        );
+                    }
                   }}
                   disabled={isLoadingAI}
-                  className="self-center flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline pt-1"
+                  className="self-center flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/70 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-all shadow-2xs"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Dùng AI chuyển đổi lại toàn diện (kèm mốc thời gian)</span>
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Dùng Gemini AI chuyển đổi lại bản ghi (Độ chính xác cao nhất)</span>
                 </button>
               </div>
             )}

@@ -7,6 +7,8 @@ export function useAudioRecorder() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
+  const [audioLevel, setAudioLevel] = useState<number>(0); // 0 - 100
+  const [isSilent, setIsSilent] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -14,8 +16,10 @@ export function useAudioRecorder() {
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const timerIntervalRef = useRef<any>(null);
+  const levelIntervalRef = useRef<any>(null);
   const accumulatedDurationRef = useRef<number>(0);
   const segmentStartTimeRef = useRef<number>(0);
+  const silentCounterRef = useRef<number>(0);
 
   const startRecording = useCallback(async () => {
     setError(null);
@@ -25,6 +29,9 @@ export function useAudioRecorder() {
     setDuration(0);
     accumulatedDurationRef.current = 0;
     setIsPaused(false);
+    setAudioLevel(0);
+    setIsSilent(false);
+    silentCounterRef.current = 0;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -47,6 +54,31 @@ export function useAudioRecorder() {
       source.connect(analyser);
       setAnalyserNode(analyser);
 
+      // Level monitoring interval (calculates RMS 0-100)
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      if (levelIntervalRef.current) clearInterval(levelIntervalRef.current);
+      levelIntervalRef.current = setInterval(() => {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / dataArray.length;
+        const normalized = Math.min(100, Math.round((avg / 128) * 100));
+        setAudioLevel(normalized);
+
+        // Detect prolonged silence (> 3.5s)
+        if (normalized < 4) {
+          silentCounterRef.current += 1;
+          if (silentCounterRef.current > 35) {
+            setIsSilent(true);
+          }
+        } else {
+          silentCounterRef.current = 0;
+          setIsSilent(false);
+        }
+      }, 100);
+
       // Determine supported mime type
       const mimeTypes = [
         "audio/webm;codecs=opus",
@@ -68,6 +100,12 @@ export function useAudioRecorder() {
       };
 
       mediaRecorder.onstop = () => {
+        if (levelIntervalRef.current) {
+          clearInterval(levelIntervalRef.current);
+          levelIntervalRef.current = null;
+        }
+        setAudioLevel(0);
+
         const mime = selectedMime || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type: mime });
         setAudioBlob(blob);
@@ -122,6 +160,11 @@ export function useAudioRecorder() {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
+    if (levelIntervalRef.current) {
+      clearInterval(levelIntervalRef.current);
+      levelIntervalRef.current = null;
+    }
+    setAudioLevel(0);
     const elapsedSegment = Math.floor((Date.now() - segmentStartTimeRef.current) / 1000);
     accumulatedDurationRef.current += elapsedSegment;
     setDuration(accumulatedDurationRef.current);
@@ -152,6 +195,11 @@ export function useAudioRecorder() {
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
       }
+      if (levelIntervalRef.current) {
+        clearInterval(levelIntervalRef.current);
+        levelIntervalRef.current = null;
+      }
+      setAudioLevel(0);
       setIsRecording(false);
       setIsPaused(false);
 
@@ -189,9 +237,15 @@ export function useAudioRecorder() {
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
     }
+    if (levelIntervalRef.current) {
+      clearInterval(levelIntervalRef.current);
+      levelIntervalRef.current = null;
+    }
     setAudioBlob(null);
     setAudioUrl(null);
     setDuration(0);
+    setAudioLevel(0);
+    setIsSilent(false);
     accumulatedDurationRef.current = 0;
     setIsPaused(false);
     setError(null);
@@ -201,6 +255,9 @@ export function useAudioRecorder() {
     return () => {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
+      }
+      if (levelIntervalRef.current) {
+        clearInterval(levelIntervalRef.current);
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -218,6 +275,8 @@ export function useAudioRecorder() {
     audioBlob,
     audioUrl,
     analyserNode,
+    audioLevel,
+    isSilent,
     error,
     startRecording,
     pauseRecording,

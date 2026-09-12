@@ -19,13 +19,22 @@ import {
   Headphones,
   ClipboardPaste,
   Trash2,
+  Upload,
+  UploadCloud,
+  FileUp,
+  FileCheck2,
+  CheckCircle2,
+  AlertCircle,
+  File,
+  RefreshCw,
 } from "lucide-react";
-import { generateGeminiTTS } from "../services/apiService";
+import { generateGeminiTTS, extractDocumentText } from "../services/apiService";
 
 export interface TextToSpeechModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialText?: string;
+  initialMode?: "text" | "file";
   currentTranscript?: string;
   currentSummaryText?: string;
   currentLanguageCode?: string;
@@ -62,18 +71,32 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
   isOpen,
   onClose,
   initialText = "",
+  initialMode = "text",
   currentTranscript = "",
   currentSummaryText = "",
   currentLanguageCode = "vi-VN",
   onSuccessToast,
   onError,
 }) => {
+  const [inputMode, setInputMode] = useState<"text" | "file">(initialMode);
   const [text, setText] = useState<string>(initialText || "");
   const [engine, setEngine] = useState<"gemini" | "browser">("gemini");
   const [selectedVoice, setSelectedVoice] = useState<string>("Kore");
   const [browserVoiceURI, setBrowserVoiceURI] = useState<string>("");
   const [availableBrowserVoices, setAvailableBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
-  
+
+  // File upload & extraction state
+  const [uploadedFileInfo, setUploadedFileInfo] = useState<{
+    name: string;
+    size: number;
+    type: string;
+    characterCount?: number;
+    wordCount?: number;
+  } | null>(null);
+  const [isExtractingFile, setIsExtractingFile] = useState<boolean>(false);
+  const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Audio state
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
   const [pitch, setPitch] = useState<number>(1.0);
@@ -92,6 +115,9 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
   // Initialize text when modal opens
   useEffect(() => {
     if (isOpen) {
+      if (initialMode) {
+        setInputMode(initialMode);
+      }
       if (initialText) {
         setText(initialText);
       } else if (!text && currentTranscript) {
@@ -100,7 +126,159 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
     } else {
       stopPlayback();
     }
-  }, [isOpen, initialText]);
+  }, [isOpen, initialText, initialMode]);
+
+  // File Upload and Text Extraction handler
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+
+    const fileExt = "." + (file.name.split(".").pop() || "").toLowerCase();
+    const validExtensions = [
+      ".txt",
+      ".md",
+      ".markdown",
+      ".pdf",
+      ".docx",
+      ".doc",
+      ".rtf",
+      ".csv",
+      ".srt",
+      ".vtt",
+      ".json",
+    ];
+
+    if (!validExtensions.includes(fileExt) && !file.type.startsWith("text/")) {
+      onError(
+        `Định dạng tệp "${fileExt || file.type}" chưa được hỗ trợ. Vui lòng chọn tệp .txt, .md, .pdf, .docx, .csv, hoặc .srt.`
+      );
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      onError("Kích thước tệp vượt quá 20MB. Vui lòng chọn tệp nhỏ hơn.");
+      return;
+    }
+
+    setIsExtractingFile(true);
+    setUploadedFileInfo({
+      name: file.name,
+      size: file.size,
+      type: fileExt.replace(".", "").toUpperCase() || "TXT",
+    });
+
+    try {
+      const isLocalPlainText = [
+        ".txt",
+        ".md",
+        ".markdown",
+        ".csv",
+        ".srt",
+        ".vtt",
+        ".json",
+      ].includes(fileExt);
+
+      if (isLocalPlainText) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = (e.target?.result as string) || "";
+          if (!content.trim()) {
+            onError("Tệp văn bản rỗng, không tìm thấy nội dung để đọc.");
+            setIsExtractingFile(false);
+            return;
+          }
+          const trimmed = content.trim();
+          setText(trimmed);
+          setAudioBlobUrl(null);
+          stopPlayback();
+          setUploadedFileInfo((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  characterCount: trimmed.length,
+                  wordCount: trimmed.split(/\s+/).length,
+                }
+              : null
+          );
+          setIsExtractingFile(false);
+          onSuccessToast(
+            `Đã nạp văn bản từ tệp "${file.name}" (${(file.size / 1024).toFixed(1)} KB)!`
+          );
+        };
+        reader.onerror = () => {
+          onError("Không thể đọc tệp văn bản từ máy tính.");
+          setIsExtractingFile(false);
+        };
+        reader.readAsText(file, "UTF-8");
+      } else {
+        // Rich documents (.docx, .pdf, .rtf)
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const base64Data = (e.target?.result as string) || "";
+            const result = await extractDocumentText(
+              base64Data,
+              file.name,
+              file.type || "application/pdf"
+            );
+            if (result && result.extractedText) {
+              const trimmed = result.extractedText.trim();
+              setText(trimmed);
+              setAudioBlobUrl(null);
+              stopPlayback();
+              setUploadedFileInfo((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      characterCount: result.characterCount,
+                      wordCount: trimmed.split(/\s+/).length,
+                    }
+                  : null
+              );
+              onSuccessToast(
+                `Đã trích xuất ${result.characterCount.toLocaleString()} ký tự từ "${file.name}"!`
+              );
+            } else {
+              throw new Error("Không nhận được nội dung trích xuất từ tệp.");
+            }
+          } catch (err: any) {
+            console.error("Lỗi trích xuất tài liệu:", err);
+            onError(err.message || "Lỗi khi trích xuất nội dung văn bản từ tệp.");
+          } finally {
+            setIsExtractingFile(false);
+          }
+        };
+        reader.onerror = () => {
+          onError("Lỗi khi đọc tệp từ thiết bị.");
+          setIsExtractingFile(false);
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (err: any) {
+      setIsExtractingFile(false);
+      onError(err.message || "Không thể xử lý tệp tải lên.");
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
 
   // Load browser voices
   useEffect(() => {
@@ -377,132 +555,379 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
           </button>
         </div>
 
-        {/* Quick Insert / Preset Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
-              Nạp nhanh:
-            </span>
-            {currentTranscript && currentTranscript.trim() && (
-              <button
-                type="button"
-                onClick={() => {
-                  setText(currentTranscript.trim());
-                  setAudioBlobUrl(null);
-                  stopPlayback();
-                  onSuccessToast("Đã nạp văn bản từ bản ghi âm lời nói!");
-                }}
-                className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-slate-700 dark:text-slate-300 hover:text-indigo-600 rounded-lg font-semibold transition-all border border-slate-200 dark:border-slate-700"
-              >
-                <FileText className="w-3 h-3 text-indigo-600" />
-                <span>Từ Bản Ghi Hiện Tại</span>
-              </button>
-            )}
+        {/* Hidden File Input for document extraction */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".txt,.md,.markdown,.pdf,.docx,.doc,.rtf,.csv,.srt,.vtt,.json,text/*"
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              handleFileUpload(e.target.files[0]);
+              e.target.value = "";
+            }
+          }}
+        />
 
-            {currentSummaryText && currentSummaryText.trim() && (
-              <button
-                type="button"
-                onClick={() => {
-                  setText(currentSummaryText.trim());
-                  setAudioBlobUrl(null);
-                  stopPlayback();
-                  onSuccessToast("Đã nạp văn bản từ bản tóm tắt!");
-                }}
-                className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-600 rounded-lg font-semibold transition-all border border-slate-200 dark:border-slate-700"
-              >
-                <Sparkles className="w-3 h-3 text-emerald-600" />
-                <span>Từ Bản Tóm Tắt AI</span>
-              </button>
-            )}
-
+        {/* Source Mode Selector: Text Input vs Document File Upload */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
             <button
               type="button"
-              onClick={handlePasteFromClipboard}
-              className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-semibold transition-all border border-slate-200 dark:border-slate-700"
-              title="Dán từ Clipboard"
+              id="btn-tts-mode-text"
+              onClick={() => setInputMode("text")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                inputMode === "text"
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              }`}
             >
-              <ClipboardPaste className="w-3 h-3" />
-              <span>Dán</span>
+              <FileText className="w-3.5 h-3.5" />
+              <span>Soạn Thảo / Dán Văn Bản</span>
+            </button>
+            <button
+              type="button"
+              id="btn-tts-mode-file"
+              onClick={() => setInputMode("file")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                inputMode === "file"
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              }`}
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>Tải Lên Tệp Tài Liệu</span>
+              <span className="hidden sm:inline-block px-1.5 py-0.2 bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 rounded text-[10px] font-bold border border-indigo-200/50 dark:border-indigo-800/50">
+                PDF, Word, TXT
+              </span>
             </button>
           </div>
 
-          {/* Clear & Copy */}
-          <div className="flex items-center gap-1.5">
-            {text.trim() && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleCopyText}
-                  className="flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-lg transition-colors"
-                  title="Sao chép nội dung"
-                >
-                  {hasCopied ? (
-                    <Check className="w-3 h-3 text-emerald-500" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                  <span>{hasCopied ? "Đã chép" : "Sao chép"}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setText("");
-                    setAudioBlobUrl(null);
-                    stopPlayback();
-                  }}
-                  className="flex items-center gap-1 px-2 py-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
-                  title="Xóa toàn bộ văn bản"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>Xóa</span>
-                </button>
-              </>
+          {/* Quick Upload action button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isExtractingFile}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all border border-indigo-200/60 dark:border-indigo-800 disabled:opacity-50"
+            title="Chọn tệp từ máy tính để đọc thành tiếng"
+          >
+            {isExtractingFile ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <FileUp className="w-3.5 h-3.5" />
             )}
-          </div>
+            <span>Chọn tệp đọc giọng nói</span>
+          </button>
         </div>
 
-        {/* Text Input Area */}
-        <div className="relative">
-          <textarea
-            id="textarea-tts-input"
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              setAudioBlobUrl(null);
-            }}
-            placeholder="Nhập hoặc dán bất kỳ văn bản nào tại đây để chuyển đổi thành giọng nói truyền cảm..."
-            rows={5}
-            className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-y leading-relaxed font-sans"
-          />
-          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1 px-1">
-            <span>
-              {wordCount.toLocaleString()} từ • {charCount.toLocaleString()} ký tự
-            </span>
-            {text.length === 0 && (
-              <span className="italic text-slate-400">
-                Mẹo: Bạn có thể chọn câu mẫu bên dưới để thử nghiệm ngay
-              </span>
+        {/* Dynamic Content View depending on inputMode */}
+        {inputMode === "file" ? (
+          <div className="space-y-3">
+            {/* Drag & Drop Upload Card */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => !isExtractingFile && fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-200 cursor-pointer ${
+                isDraggingOver
+                  ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 scale-[1.005]"
+                  : "border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+              }`}
+            >
+              {isExtractingFile ? (
+                <div className="py-6 flex flex-col items-center justify-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center animate-pulse shadow-sm">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                      Đang trích xuất nội dung từ "{uploadedFileInfo?.name}"...
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Đang xử lý nội dung văn bản tự nhiên để sẵn sàng chuyển đổi thành giọng nói AI
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-4 flex flex-col items-center justify-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                      Kéo thả tệp tài liệu vào đây, hoặc{" "}
+                      <span className="text-indigo-600 dark:text-indigo-400 underline font-semibold">
+                        bấm để duyệt tệp từ máy
+                      </span>
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Hỗ trợ: PDF (.pdf), Word (.docx), Văn bản (.txt, .md), Phụ đề (.srt, .vtt) (tối đa 20MB)
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      📄 PDF
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      📝 Word (DOCX)
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      📋 Văn bản (TXT, MD)
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      🎬 Phụ đề (SRT, VTT)
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Extracted File Details & Preview Box */}
+            {uploadedFileInfo && text.trim() && (
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-3 animate-in fade-in duration-150">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 dark:border-slate-700/60 pb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <FileCheck2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100 max-w-xs sm:max-w-md truncate">
+                          {uploadedFileInfo.name}
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-200/70 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                          {uploadedFileInfo.type}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        {(uploadedFileInfo.size / 1024).toFixed(1)} KB • {charCount.toLocaleString()} ký tự • {wordCount.toLocaleString()} từ
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setInputMode("text")}
+                      className="px-2.5 py-1 text-xs font-semibold bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1"
+                    >
+                      <FileText className="w-3 h-3 text-indigo-500" />
+                      <span>Sửa văn bản</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-2.5 py-1 text-xs font-semibold bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3 text-slate-500" />
+                      <span>Đổi tệp</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadedFileInfo(null);
+                        setText("");
+                        setAudioBlobUrl(null);
+                        stopPlayback();
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
+                      title="Xóa tệp này"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Text Preview Display */}
+                <div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                    <span>Nội dung trích xuất sẵn sàng đọc:</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyText}
+                      className="hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-1 text-[11px]"
+                    >
+                      {hasCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                      <span>{hasCopied ? "Đã chép" : "Sao chép"}</span>
+                    </button>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/70 dark:border-slate-700/70 text-xs text-slate-700 dark:text-slate-200 max-h-36 overflow-y-auto leading-relaxed whitespace-pre-wrap font-sans">
+                    {text}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
-        </div>
+        ) : (
+          /* Text Input Mode */
+          <div className="space-y-3">
+            {/* Quick Insert / Preset Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+                  Nạp nhanh:
+                </span>
+                {currentTranscript && currentTranscript.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setText(currentTranscript.trim());
+                      setAudioBlobUrl(null);
+                      stopPlayback();
+                      onSuccessToast("Đã nạp văn bản từ bản ghi âm lời nói!");
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-slate-700 dark:text-slate-300 hover:text-indigo-600 rounded-lg font-semibold transition-all border border-slate-200 dark:border-slate-700"
+                  >
+                    <FileText className="w-3 h-3 text-indigo-600" />
+                    <span>Từ Bản Ghi Hiện Tại</span>
+                  </button>
+                )}
 
-        {/* Quick Sample Selector if text is empty */}
-        {text.length === 0 && (
-          <div className="flex flex-wrap gap-2 pt-1">
-            <span className="text-xs font-semibold text-slate-400 self-center">Mẫu thử:</span>
-            {SAMPLE_TEXTS.map((sample, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => {
-                  setText(sample.text);
+                {currentSummaryText && currentSummaryText.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setText(currentSummaryText.trim());
+                      setAudioBlobUrl(null);
+                      stopPlayback();
+                      onSuccessToast("Đã nạp văn bản từ bản tóm tắt!");
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-600 rounded-lg font-semibold transition-all border border-slate-200 dark:border-slate-700"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <span>Từ Bản Tóm Tắt AI</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-slate-700 dark:text-slate-300 hover:text-indigo-600 rounded-lg font-semibold transition-all border border-slate-200 dark:border-slate-700"
+                  title="Tải tệp tài liệu (.pdf, .docx, .txt, .md...)"
+                >
+                  <Upload className="w-3 h-3 text-indigo-600" />
+                  <span>Tải Tệp Lên</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePasteFromClipboard}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-semibold transition-all border border-slate-200 dark:border-slate-700"
+                  title="Dán từ Clipboard"
+                >
+                  <ClipboardPaste className="w-3 h-3" />
+                  <span>Dán</span>
+                </button>
+              </div>
+
+              {/* Clear & Copy */}
+              <div className="flex items-center gap-1.5">
+                {text.trim() && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCopyText}
+                      className="flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-lg transition-colors"
+                      title="Sao chép nội dung"
+                    >
+                      {hasCopied ? (
+                        <Check className="w-3 h-3 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                      <span>{hasCopied ? "Đã chép" : "Sao chép"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setText("");
+                        setUploadedFileInfo(null);
+                        setAudioBlobUrl(null);
+                        stopPlayback();
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
+                      title="Xóa toàn bộ văn bản"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Xóa</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Uploaded File Banner in Text Mode */}
+            {uploadedFileInfo && (
+              <div className="flex items-center justify-between px-3 py-1.5 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 rounded-xl text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileCheck2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span className="font-semibold text-indigo-950 dark:text-indigo-200 truncate">
+                    Nội dung từ tệp: {uploadedFileInfo.name} ({(uploadedFileInfo.size / 1024).toFixed(1)} KB)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUploadedFileInfo(null)}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0 ml-2"
+                >
+                  Bỏ đánh dấu
+                </button>
+              </div>
+            )}
+
+            {/* Text Input Area (Supports Drag & Drop as well) */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`relative rounded-2xl transition-all ${
+                isDraggingOver ? "ring-2 ring-indigo-500 bg-indigo-50/30" : ""
+              }`}
+            >
+              <textarea
+                id="textarea-tts-input"
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
                   setAudioBlobUrl(null);
                 }}
-                className="px-2.5 py-1 text-xs bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg transition-all border border-indigo-200/50 dark:border-indigo-800/50"
-              >
-                {sample.title}
-              </button>
-            ))}
+                placeholder="Nhập hoặc dán bất kỳ văn bản nào tại đây, hoặc kéo thả tệp tài liệu (.pdf, .docx, .txt) vào đây để chuyển đổi thành giọng nói truyền cảm..."
+                rows={5}
+                className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-y leading-relaxed font-sans"
+              />
+              <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1 px-1">
+                <span>
+                  {wordCount.toLocaleString()} từ • {charCount.toLocaleString()} ký tự
+                </span>
+                {text.length === 0 && (
+                  <span className="italic text-slate-400">
+                    Mẹo: Có thể tải tệp PDF, Word, TXT hoặc chọn câu mẫu bên dưới
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Sample Selector if text is empty */}
+            {text.length === 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className="text-xs font-semibold text-slate-400 self-center">Mẫu thử:</span>
+                {SAMPLE_TEXTS.map((sample, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setText(sample.text);
+                      setAudioBlobUrl(null);
+                    }}
+                    className="px-2.5 py-1 text-xs bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg transition-all border border-indigo-200/50 dark:border-indigo-800/50"
+                  >
+                    {sample.title}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

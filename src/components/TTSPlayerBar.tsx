@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Headphones,
   Maximize2,
+  Upload,
 } from "lucide-react";
 import { generateGeminiTTS } from "../services/apiService";
 
@@ -28,7 +29,7 @@ export interface TTSPlayerBarProps {
   currentLanguageCode: string;
   onError: (msg: string) => void;
   onSuccessToast: (msg: string) => void;
-  onOpenFullStudio?: (text: string, title: string) => void;
+  onOpenFullStudio?: (text: string, title: string, mode?: "text" | "file") => void;
 }
 
 const GEMINI_VOICES = [
@@ -333,13 +334,29 @@ export const TTSPlayerBar: React.FC<TTSPlayerBarProps> = ({
               </button>
             </div>
 
+            {/* Open Full Studio with File Upload */}
+            {onOpenFullStudio && (
+              <button
+                type="button"
+                onClick={() => {
+                  stopPlayback();
+                  onOpenFullStudio(text, title, "file");
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-xs font-semibold transition-colors"
+                title="Tải tệp tài liệu (PDF, Word, TXT...) để chuyển thành giọng nói"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline">Tải tệp</span>
+              </button>
+            )}
+
             {/* Open Full Studio */}
             {onOpenFullStudio && (
               <button
                 type="button"
                 onClick={() => {
                   stopPlayback();
-                  onOpenFullStudio(text, title);
+                  onOpenFullStudio(text, title, "text");
                 }}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
                 title="Mở Studio TTS chuyên sâu (toàn màn hình)"

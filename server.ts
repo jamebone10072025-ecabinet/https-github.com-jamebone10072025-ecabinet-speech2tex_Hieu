@@ -3,6 +3,8 @@ import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+// @ts-ignore
+import mammoth from "mammoth";
 
 dotenv.config();
 
@@ -407,6 +409,121 @@ app.post("/api/tts", async (req: Request, res: Response) => {
     console.error("Lỗi API TTS:", error?.message || error);
     res.status(isTransientAiError(error) ? 503 : 500).json({
       error: formatAiErrorMessage(error, "Không thể tạo giọng đọc văn bản qua Gemini TTS."),
+    });
+  }
+});
+
+// Extract text from uploaded document file (PDF, DOCX, TXT, MD, etc.) for Text-to-Speech
+app.post("/api/extract-document-text", async (req: Request, res: Response) => {
+  try {
+    const { fileData, fileName = "document.txt", mimeType = "text/plain" } = req.body;
+
+    if (!fileData || typeof fileData !== "string") {
+      res.status(400).json({ error: "Dữ liệu tệp không hợp lệ hoặc bị trống." });
+      return;
+    }
+
+    const cleanBase64 = fileData.replace(/^data:[a-zA-Z0-9.+_/-]+;base64,/, "");
+    const lowerName = fileName.toLowerCase();
+
+    // 1. Plain text formats (.txt, .md, .csv, .json, .srt, .vtt)
+    const isPlainText =
+      mimeType.startsWith("text/") ||
+      lowerName.endsWith(".txt") ||
+      lowerName.endsWith(".md") ||
+      lowerName.endsWith(".markdown") ||
+      lowerName.endsWith(".csv") ||
+      lowerName.endsWith(".srt") ||
+      lowerName.endsWith(".vtt") ||
+      lowerName.endsWith(".json");
+
+    if (isPlainText) {
+      try {
+        const decodedText = Buffer.from(cleanBase64, "base64").toString("utf-8");
+        if (decodedText && decodedText.trim()) {
+          res.json({
+            success: true,
+            extractedText: decodedText.trim(),
+            fileName,
+            characterCount: decodedText.length,
+          });
+          return;
+        }
+      } catch (decodeErr) {
+        console.warn("Lỗi giải mã UTF-8 plain text, sẽ tiếp tục qua AI:", decodeErr);
+      }
+    }
+
+    // 2. Word document (.docx) using mammoth
+    if (lowerName.endsWith(".docx") || mimeType.includes("wordprocessingml")) {
+      try {
+        const docBuffer = Buffer.from(cleanBase64, "base64");
+        const mammothResult = await mammoth.extractRawText({ buffer: docBuffer });
+        const text = mammothResult.value?.trim();
+        if (text) {
+          res.json({
+            success: true,
+            extractedText: text,
+            fileName,
+            characterCount: text.length,
+          });
+          return;
+        }
+      } catch (docxErr) {
+        console.warn("Lỗi trích xuất DOCX bằng mammoth, chuyển sang Gemini AI:", docxErr);
+      }
+    }
+
+    // 3. PDF or Rich documents via Gemini AI vision/document understanding
+    const ai = getGeminiClient();
+    const promptText = `Bạn là hệ thống trích xuất văn bản phục vụ tính năng đọc thành giọng nói (Text-to-Speech).
+Nhiệm vụ: Trích xuất toàn bộ nội dung văn bản trong tệp tài liệu này (${fileName}).
+Yêu cầu:
+1. Đọc và lấy đầy đủ toàn bộ nội dung chữ, các đoạn văn, tiêu đề.
+2. Bỏ qua số trang vụn vặt, đầu trang/chân trang lặp lại hoặc mã định dạng không cần thiết để tạo thành văn bản đọc liền mạch, tự nhiên.
+3. Giữ nguyên ngôn ngữ gốc và ngữ pháp chuẩn.
+4. Chỉ trả về duy nhất nội dung văn bản được trích xuất, tuyệt đối KHÔNG kèm lời chào, giải thích hay lời bình của AI.`;
+
+    let resolvedMime = mimeType;
+    if (lowerName.endsWith(".pdf") || mimeType === "application/pdf") {
+      resolvedMime = "application/pdf";
+    } else if (lowerName.endsWith(".txt") || lowerName.endsWith(".md")) {
+      resolvedMime = "text/plain";
+    }
+
+    const filePart = {
+      inlineData: {
+        mimeType: resolvedMime || "application/pdf",
+        data: cleanBase64,
+      },
+    };
+
+    const response = await generateContentWithRetry(ai, {
+      model: "gemini-3.1-flash-lite",
+      fallbackModels: ["gemini-3.8-flash", "gemini-flash-latest"],
+      contents: {
+        parts: [filePart, { text: promptText }],
+      },
+      config: {
+        temperature: 0.2,
+      },
+    });
+
+    const extracted = response.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    if (!extracted) {
+      throw new Error("Không thể trích xuất nội dung văn bản từ tệp.");
+    }
+
+    res.json({
+      success: true,
+      extractedText: extracted,
+      fileName,
+      characterCount: extracted.length,
+    });
+  } catch (error: any) {
+    console.error("Lỗi trích xuất tệp văn bản:", error?.message || error);
+    res.status(isTransientAiError(error) ? 503 : 500).json({
+      error: formatAiErrorMessage(error, "Không thể trích xuất nội dung văn bản từ tệp tài liệu."),
     });
   }
 });
