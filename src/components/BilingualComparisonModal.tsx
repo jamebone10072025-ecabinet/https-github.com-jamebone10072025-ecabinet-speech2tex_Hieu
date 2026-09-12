@@ -81,7 +81,7 @@ export const BilingualComparisonModal: React.FC<BilingualComparisonModalProps> =
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                Đối Chiếu Văn Bản Song Ngữ
+                Đối chiếu văn bản song ngữ
               </h3>
               <p className="text-xs text-slate-400">Xem và so sánh văn bản gốc và bản dịch song song</p>
             </div>

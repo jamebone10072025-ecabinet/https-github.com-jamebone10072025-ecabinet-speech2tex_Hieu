@@ -535,7 +535,7 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
-                  Chuyển Văn Bản Thành Giọng Nói (Text-to-Speech Studio)
+                  Chuyển văn bản thành giọng nói (Text-to-Speech Studio)
                 </h2>
                 <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold rounded-md uppercase tracking-wider">
                   TTS AI
@@ -583,7 +583,7 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Soạn Thảo / Dán Văn Bản</span>
+              <span>Soạn thảo / Dán văn bản</span>
             </button>
             <button
               type="button"
@@ -596,7 +596,7 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
               }`}
             >
               <UploadCloud className="w-3.5 h-3.5" />
-              <span>Tải Lên Tệp Tài Liệu</span>
+              <span>Tải lên tệp tài liệu</span>
               <span className="hidden sm:inline-block px-1.5 py-0.2 bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-300 rounded text-[10px] font-bold border border-indigo-200/50 dark:border-indigo-800/50">
                 PDF, Word, TXT
               </span>
@@ -781,7 +781,7 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
                     className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-slate-700 dark:text-slate-300 hover:text-indigo-600 rounded-lg font-semibold transition-all border border-slate-200 dark:border-slate-700"
                   >
                     <FileText className="w-3 h-3 text-indigo-600" />
-                    <span>Từ Bản Ghi Hiện Tại</span>
+                    <span>Từ bản ghi hiện tại</span>
                   </button>
                 )}
 
@@ -797,7 +797,7 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
                     className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-600 rounded-lg font-semibold transition-all border border-slate-200 dark:border-slate-700"
                   >
                     <Sparkles className="w-3 h-3 text-emerald-600" />
-                    <span>Từ Bản Tóm Tắt AI</span>
+                    <span>Từ bản tóm tắt AI</span>
                   </button>
                 )}
 
@@ -808,7 +808,7 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
                   title="Tải tệp tài liệu (.pdf, .docx, .txt, .md...)"
                 >
                   <Upload className="w-3 h-3 text-indigo-600" />
-                  <span>Tải Tệp Lên</span>
+                  <span>Tải tệp lên</span>
                 </button>
 
                 <button
@@ -964,7 +964,7 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
                 }`}
               >
                 <Globe className="w-3.5 h-3.5" />
-                <span>Giọng Trình Duyệt (Web Speech)</span>
+                <span>Giọng trình duyệt (Web Speech)</span>
               </button>
             </div>
 
@@ -1229,7 +1229,7 @@ export const TextToSpeechModal: React.FC<TextToSpeechModalProps> = ({
                 title="Tải tệp âm thanh giọng đọc (.wav)"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Tải Tệp Âm Thanh (.wav)</span>
+                <span>Tải tệp âm thanh (.wav)</span>
               </button>
             )}
 

@@ -506,7 +506,7 @@ export const TTSPlayerBar: React.FC<TTSPlayerBarProps> = ({
                 title="Tải tệp âm thanh giọng đọc (.wav)"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Tải Audio</span>
+                <span>Tải audio</span>
               </button>
             )}
           </div>

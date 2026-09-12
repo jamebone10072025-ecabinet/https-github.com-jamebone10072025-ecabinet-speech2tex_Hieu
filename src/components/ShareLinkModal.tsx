@@ -102,7 +102,7 @@ export const ShareLinkModal: React.FC<ShareLinkModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Chia Sẻ Bản Ghi & Tóm Tắt (Shareable Link)
+                Chia sẻ bản ghi & tóm tắt (Shareable Link)
               </h3>
               <p className="text-xs text-slate-400">
                 Tạo liên kết tạm thời qua URL Hash để người khác xem tức thì

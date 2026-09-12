@@ -348,7 +348,7 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   }`}
                 >
                   <GitBranch className="w-3 h-3" />
-                  <span>Sơ Đồ Ý</span>
+                  <span>Sơ đồ ý</span>
                 </button>
                 <button
                   type="button"
@@ -426,11 +426,11 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                     type="button"
                     id="btn-export-doc-summary"
                     onClick={onOpenExportModal}
-                    title="Xuất bản ghi & tóm tắt ra tệp PDF hoặc Word"
+                    title="Xuất bản ghi & tóm tắt ra tệp HTML offline, Word hoặc PDF"
                     className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-all shadow-xs"
                   >
                     <FileDown className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>Xuất PDF / Word</span>
+                    <span>Xuất tài liệu (HTML, Word, PDF)</span>
                   </button>
                 )}
 

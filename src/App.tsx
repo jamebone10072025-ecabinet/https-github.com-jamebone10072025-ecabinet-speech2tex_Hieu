@@ -647,7 +647,7 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  Ghi Chép Giọng Nói AI
+                  Ghi chép giọng nói AI
                 </h1>
                 <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800">
                   <Languages className="w-3 h-3" />
@@ -672,7 +672,7 @@ export default function App() {
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all disabled:opacity-50"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Chạy Demo</span>
+              <span>Chạy demo</span>
             </button>
 
             {/* New Session Button */}
@@ -712,7 +712,7 @@ export default function App() {
               className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800 rounded-xl text-xs font-bold shadow-2xs transition-all"
             >
               <Volume2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span className="hidden sm:inline">Đọc Văn Bản (TTS)</span>
+              <span className="hidden sm:inline">Đọc văn bản (TTS)</span>
               <span className="sm:hidden">TTS</span>
             </button>
 
@@ -977,7 +977,7 @@ export default function App() {
               className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Chạy Thử Demo Ngay</span>
+              <span>Chạy thử demo ngay</span>
             </button>
           </div>
         )}
@@ -1082,7 +1082,7 @@ export default function App() {
         durationSeconds={audioDuration}
       />
 
-      {/* Export Document (PDF / Word / Audio WAV) Modal */}
+      {/* Export Document (HTML Offline / Word / PDF / Audio WAV) Modal */}
       <ExportDocumentModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
@@ -1092,6 +1092,7 @@ export default function App() {
         languageCode={selectedLanguage.code}
         transcript={transcript}
         summary={summary}
+        audioUrl={audioUrl}
         onSuccess={(msg) => showToast(msg, "success")}
         onError={(msg) => showToast(msg, "error")}
       />

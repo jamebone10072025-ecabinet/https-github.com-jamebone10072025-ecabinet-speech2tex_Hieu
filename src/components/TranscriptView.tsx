@@ -548,6 +548,18 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({
                   <>
                     <button
                       type="button"
+                      id="btn-download-html-offline"
+                      onClick={() => {
+                        setShowDownloadMenu(false);
+                        onOpenExportModal();
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center justify-between group"
+                    >
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">Tệp HTML offline</span>
+                      <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded">.html</span>
+                    </button>
+                    <button
+                      type="button"
                       id="btn-download-docx"
                       onClick={() => {
                         setShowDownloadMenu(false);

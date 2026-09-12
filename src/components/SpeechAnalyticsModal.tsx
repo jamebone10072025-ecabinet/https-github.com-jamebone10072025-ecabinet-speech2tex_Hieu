@@ -93,7 +93,7 @@ export const SpeechAnalyticsModal: React.FC<SpeechAnalyticsModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                Chỉ Số & Phân Tích Giọng Nói (Speech Analytics)
+                Chỉ số & phân tích giọng nói (Speech Analytics)
               </h3>
               <p className="text-xs text-slate-400">Đánh giá tốc độ, sự mạch lạc và vốn từ vựng</p>
             </div>

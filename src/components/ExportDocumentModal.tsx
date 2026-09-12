@@ -17,9 +17,10 @@ import {
   Pause,
   Download,
   RotateCcw,
+  Globe,
 } from "lucide-react";
 import { SummaryResult, SessionCategory } from "../types";
-import { exportToDocx, exportToPdf, ExportDocumentOptions } from "../utils/documentExporter";
+import { exportToDocx, exportToPdf, exportToHtml, ExportDocumentOptions } from "../utils/documentExporter";
 import { generateGeminiTTS } from "../services/apiService";
 
 const GEMINI_VOICES = [
@@ -39,6 +40,7 @@ interface ExportDocumentModalProps {
   languageCode?: string;
   transcript: string;
   summary: SummaryResult | null;
+  audioUrl?: string | null;
   onSuccess: (msg: string) => void;
   onError: (msg: string) => void;
 }
@@ -52,6 +54,7 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
   languageCode = "vi-VN",
   transcript,
   summary,
+  audioUrl,
   onSuccess,
   onError,
 }) => {
@@ -61,6 +64,9 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
   const [customTitle, setCustomTitle] = useState(title || "Bản ghi âm & Tóm tắt AI");
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
+  const [isExportingHtml, setIsExportingHtml] = useState(false);
+  const [embedAudioInHtml, setEmbedAudioInHtml] = useState(true);
+  const [includeOfflineTTSInHtml, setIncludeOfflineTTSInHtml] = useState(true);
 
   // Audio TTS export state
   const [selectedVoice, setSelectedVoice] = useState<string>("Kore");
@@ -191,6 +197,40 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
     }
   };
 
+  const handleExportHtml = async () => {
+    if (!includeTranscript && !includeSummary) {
+      onError("Vui lòng chọn ít nhất một nội dung để xuất (Bản ghi hoặc Tóm tắt).");
+      return;
+    }
+
+    setIsExportingHtml(true);
+    try {
+      const opts: ExportDocumentOptions = {
+        title: customTitle,
+        category,
+        languageName,
+        languageCode,
+        dateStr: new Date().toLocaleString("vi-VN"),
+        transcript,
+        summary,
+        includeTranscript,
+        includeSummary: includeSummary && !!summary,
+        includeActionItems,
+        audioUrl,
+        embedAudio: embedAudioInHtml && !!audioUrl,
+        includeOfflineTTS: includeOfflineTTSInHtml,
+      };
+
+      await exportToHtml(opts);
+      onSuccess("Đã xuất tệp HTML chạy offline (.html) thành công!");
+      onClose();
+    } catch (err: any) {
+      onError(err.message || "Không thể xuất tệp HTML.");
+    } finally {
+      setIsExportingHtml(false);
+    }
+  };
+
   // Export summary as Audio WAV file using TTS
   const handleExportAudio = async () => {
     if (!summary) {
@@ -290,10 +330,10 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Xuất Tài Liệu & Âm Thanh (Word, PDF, Audio WAV)
+                Xuất tài liệu & âm thanh (HTML offline, Word, PDF, Audio WAV)
               </h3>
               <p className="text-xs text-slate-400">
-                Lưu trữ bản ghi và tóm tắt AI ra tệp tài liệu hoặc file âm thanh giọng đọc
+                Lưu trữ tệp HTML chạy offline độc lập, tài liệu văn bản hoặc file âm thanh giọng đọc
               </p>
             </div>
           </div>
@@ -432,6 +472,59 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
             </div>
           </div>
 
+          {/* Standalone Offline HTML Export Configuration Section */}
+          <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/70 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Globe className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
+                    Xuất tệp HTML độc lập chạy 100% offline (.html)
+                  </h4>
+                  <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">
+                    Mở được trên mọi máy tính và điện thoại không cần internet, máy chủ hay cài đặt
+                  </p>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
+                Offline 100%
+              </span>
+            </div>
+
+            <div className="space-y-2 pt-1 border-t border-emerald-100 dark:border-emerald-900/50">
+              <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeOfflineTTSInHtml}
+                  onChange={(e) => setIncludeOfflineTTSInHtml(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                />
+                <span>Tích hợp bộ đọc giọng nói Text-to-Speech offline (Web Speech API trình duyệt)</span>
+              </label>
+
+              <label
+                className={`flex items-center gap-2 text-xs cursor-pointer ${
+                  audioUrl ? "text-slate-700 dark:text-slate-300" : "text-slate-400 dark:text-slate-500"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  disabled={!audioUrl}
+                  checked={embedAudioInHtml && !!audioUrl}
+                  onChange={(e) => setEmbedAudioInHtml(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                />
+                <span>
+                  {audioUrl
+                    ? "Nhúng file âm thanh ghi âm vào tệp HTML (phát lại offline không cần mạng)"
+                    : "Chưa có bản ghi âm để nhúng vào tệp HTML"}
+                </span>
+              </label>
+            </div>
+          </div>
+
           {/* Audio TTS Export Configuration Section */}
           <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/70 space-y-3">
             <div className="flex items-center justify-between">
@@ -441,7 +534,7 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
-                    Xuất Bản Tóm Tắt Thành Tệp Âm Thanh (.wav)
+                    Xuất bản tóm tắt thành tệp âm thanh (.wav)
                   </h4>
                   <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80">
                     Sử dụng động cơ Gemini AI TTS chuyển đổi bản tóm tắt thành file giọng nói tự nhiên
@@ -553,7 +646,7 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
               </div>
             ) : (
               <p className="text-xs text-slate-500 dark:text-slate-400 italic">
-                Chưa có bản tóm tắt AI. Vui lòng bấm "Tạo Tóm Tắt AI" ở màn hình chính trước để xuất tệp âm thanh.
+                Chưa có bản tóm tắt AI. Vui lòng bấm "Tạo tóm tắt AI" ở màn hình chính trước để xuất tệp âm thanh.
               </p>
             )}
           </div>
@@ -570,6 +663,23 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
           </button>
 
           <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
+            {/* HTML Offline Button */}
+            <button
+              type="button"
+              id="btn-export-html"
+              onClick={handleExportHtml}
+              disabled={isExportingHtml || isExportingDocx || isExportingPdf || isExportingAudio}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all disabled:opacity-50"
+              title="Xuất file HTML độc lập chạy offline 100%, có audio player và bộ đọc TTS"
+            >
+              {isExportingHtml ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Globe className="w-4 h-4" />
+              )}
+              <span>{isExportingHtml ? "Đang tạo HTML..." : "Xuất file HTML offline (.html)"}</span>
+            </button>
+
             {/* Audio Summary Export Button */}
             <button
               type="button"
@@ -584,7 +694,7 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
               ) : (
                 <Volume2 className="w-4 h-4" />
               )}
-              <span>{isExportingAudio ? "Đang tạo Audio..." : "Xuất File Âm Thanh (.wav)"}</span>
+              <span>{isExportingAudio ? "Đang tạo Audio..." : "Xuất file âm thanh (.wav)"}</span>
             </button>
 
             {/* Word Button */}
@@ -600,7 +710,7 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
               ) : (
                 <FileCode className="w-4 h-4" />
               )}
-              <span>{isExportingDocx ? "Đang xuất Word..." : "Xuất File Word (.docx)"}</span>
+              <span>{isExportingDocx ? "Đang xuất Word..." : "Xuất file Word (.docx)"}</span>
             </button>
 
             {/* PDF Button */}
@@ -616,7 +726,7 @@ export const ExportDocumentModal: React.FC<ExportDocumentModalProps> = ({
               ) : (
                 <FileDown className="w-4 h-4" />
               )}
-              <span>{isExportingPdf ? "Đang xuất PDF..." : "Xuất File PDF (.pdf)"}</span>
+              <span>{isExportingPdf ? "Đang xuất PDF..." : "Xuất file PDF (.pdf)"}</span>
             </button>
           </div>
         </div>
